@@ -49,26 +49,20 @@
 
 - 中间件（server）
 
-运行ServerApplication.java的main方法，启动http服务（8082）和tcp服务（8083）
+运行ServerApplication.java的main方法，启动http服务（8082）和tcp服务（8081）
 
 - 第三方（thirdpart）
 
-运行ThirdPartApplication的main方法，启动http服务（8080）
+运行ThirdPartApplication.java的main方法，启动http服务（8080）
 
 - 智能设备（client）
 
-运行NettyClient的main方法，需要传入参数，可以启动多个实例，代表多台机器，每一台机器需要不同的编号，入参第三个就是机器的编号
+NettyClientApplication.java的main方法，启动http服务（8082）
 
-第一个入参是中间件tcp服务器所在ip地址
+调用http://localhost:8082/createClient?id=1 创建id为1的客户端
 
-第二个入参是中间件tcp服务器开启的监听端口号
+调用http://localhost:8082/createClient?id=2 创建id为2的客户端
 
-第三方入参是智能设备的唯一编号
+调用http://localhost:8082/createClient?id=3 创建id为3的客户端
 
-客户端1
-
-> localhost 8083 num1
-
-客户端2
-
->localhost 8083 num2
+定时任务定时10秒发送一次心跳给中间件并最终传给第三方，并返回结果

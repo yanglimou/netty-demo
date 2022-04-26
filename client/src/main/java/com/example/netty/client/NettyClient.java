@@ -12,59 +12,73 @@ import io.netty.handler.codec.string.StringEncoder;
 import io.netty.util.CharsetUtil;
 import lombok.extern.slf4j.Slf4j;
 
-
 @Slf4j
-public class NettyClient implements Runnable {
-    @Override
-    public void run() {//心跳
-        while (true) {
-            if (channel != null && channel.isWritable()) {
-                String request = "%start%heartbeat:" + id + "%end%";
-//                log.info("发送心跳信息：{}", request);
-                channel.writeAndFlush(request);
-                try {
-                    Thread.sleep(10000L);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+public class NettyClient {
+    private NioEventLoopGroup workerGroup;
+
+    public void sendHeartBeat() {
+        if (channel.isWritable()) {
+            channel.writeAndFlush("heartbeat:" + id);
+            log.debug("发送心跳信息");
+        }
+    }
+
+    private String id;
+
+    private Channel channel;
+
+    private NettyClient() {
+    }
+
+    public void stopClient() {
+        try {
+            if (channel != null)
+                channel.close();
+        } catch (Exception exception) {
+            log.error("channel.close 报错", exception);
+        } finally {
+            if (workerGroup != null) {
+                workerGroup.shutdownGracefully();
             }
         }
     }
 
-    private Channel channel;
-
-    private String id;
-
-    public NettyClient(Channel channel, String id) {
-        this.channel = channel;
-        this.id = id;
-    }
-
-    public static void main(String[] args) throws Exception {
-        String host = args[0];
-        int port = Integer.parseInt(args[1]);
-        String id = args[2];
-        NioEventLoopGroup workerGroup = new NioEventLoopGroup();
+    public static NettyClient createClient(String id, String host, int port) {
+        NettyClient nettyClient = new NettyClient();
+        nettyClient.id = id;
+        //判断是否已经存在，不存在才创建
+        nettyClient.workerGroup = new NioEventLoopGroup();
         try {
             Bootstrap bootstrap = new Bootstrap();
-            bootstrap.group(workerGroup)
+            bootstrap.group(nettyClient.workerGroup)
                     .channel(NioSocketChannel.class)
                     .option(ChannelOption.SO_KEEPALIVE, true)
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             ChannelPipeline pipeline = socketChannel.pipeline();
-                            pipeline.addLast(new DelimiterBasedFrameDecoder(1024, Unpooled.copiedBuffer("%end%", CharsetUtil.UTF_8)));
+
+
                             pipeline.addLast(new StringEncoder(CharsetUtil.UTF_8));
+                            pipeline.addLast(new NettyClientStringWrapHandler());
+
+                            pipeline.addLast(new DelimiterBasedFrameDecoder(1024, Unpooled.copiedBuffer("%end%", CharsetUtil.UTF_8)));
                             pipeline.addLast(new StringDecoder(CharsetUtil.UTF_8));
+                            pipeline.addLast(new NettyClientSubstringHandler());
                             pipeline.addLast(new NettyClientHandler());
                         }
                     });
             ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
-            new Thread(new NettyClient(channelFuture.channel(), id)).start();
-            channelFuture.channel().closeFuture().sync();
-        } finally {
-            workerGroup.shutdownGracefully();
+            nettyClient.channel = channelFuture.channel();
+            nettyClient.channel.closeFuture().addListener((ChannelFutureListener) channelFuture1 -> {
+                nettyClient.workerGroup.shutdownGracefully();
+            });
+            log.info("client创建成功");
+            return nettyClient;
+        } catch (Exception exception) {
+            log.error("client创建失败", exception);
+            nettyClient.workerGroup.shutdownGracefully();
+            return null;
         }
     }
 }

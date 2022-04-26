@@ -10,6 +10,7 @@ import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
 import io.netty.util.CharsetUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Component;
 public class NettyServer implements CommandLineRunner {
     @Value("${netty.port}")
     private int port;
+    @Autowired
+    private NettyServerHandler nettyServerHandler;
 
     @Override
     public void run(String... args) throws Exception {
@@ -32,10 +35,21 @@ public class NettyServer implements CommandLineRunner {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) {
                             ChannelPipeline pipeline = socketChannel.pipeline();
-                            pipeline.addLast(new DelimiterBasedFrameDecoder(1024, Unpooled.copiedBuffer("%end%", CharsetUtil.UTF_8)));
+
+                            //编码 string—>byte
                             pipeline.addLast(new StringEncoder(CharsetUtil.UTF_8));
+
+                            //发送出去的消息增加开始标识和结束标识
+                            pipeline.addLast(new NettyServerStringWrapHandler());
+
+                            //结束标识 %end%
+                            pipeline.addLast(new DelimiterBasedFrameDecoder(1024, Unpooled.copiedBuffer("%end%", CharsetUtil.UTF_8)));
+                            //解码 byte->string
                             pipeline.addLast(new StringDecoder(CharsetUtil.UTF_8));
-                            pipeline.addLast(new NettyServerHandler());
+                            //开始标识
+                            pipeline.addLast(new NettyServerSubstringHandler());
+                            //具体处理
+                            pipeline.addLast(nettyServerHandler);
                         }
                     })
                     .option(ChannelOption.SO_BACKLOG, 128)

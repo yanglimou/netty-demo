@@ -34,7 +34,7 @@ public class ServerApplication {
             log.error("设备不存在或者未上线");
         } else {
             String uuid = UUID.randomUUID().toString();
-            String request = "%start%fingerprint:" + uuid + "%end%";
+            String request = "fingerprint:" + uuid;
             log.info("【指纹下发请求】请求客户端，request：{}", request);
             channel.writeAndFlush(request);
             //阻塞等待结果
